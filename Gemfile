@@ -11,3 +11,6 @@ gem "nokogiri"
 
 # A Ruby client library for Redis
 gem "redis"
+
+# Ruby client for RabbitMQ
+gem "bunny", ">= 2.14.1"
