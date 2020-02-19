@@ -169,7 +169,123 @@ module Hltv
       match_id = match_ele.attr("href").value.split("/")[2].to_i
       # ----------------------
 
-      {event: {id: event_id, name: event_name}, match_id: match_id, team1: team1, team1_firstHalf: team1_firstHalf, team1_secondHalf: team1_secondHalf, team2: team2, team2_firstHalf: team2_firstHalf, team2_secondHalf: team2_secondHalf, breakdown: breakdown}
+      stats_eles = doc.css(".stats-table")
+
+      team1_stats_ele = stats_eles.first
+      team1_stats = []
+      team1_stats_ele.css("tbody tr").map do |player_tr_ele|
+        player_ele  = player_tr_ele.css("td")[0]
+        player = {id: player_ele.css("a").attr("/")[-2].to_i, name: player_ele.css("a").text}
+
+        kills_ele   = player_tr_ele.css("td")[1]
+        kills = kills_ele.text
+
+        assists_ele = player_tr_ele.css("td")[2]
+        assists = assists_ele.text
+
+        deaths_ele  = player_tr_ele.css("td")[3]
+        deaths = deaths_ele.text
+
+        kdratio_ele = player_tr_ele.css("td")[4]
+        kdratio = kdratio_ele.text
+
+        kddiff_ele  = player_tr_ele.css("td")[5]
+        kddiff = kddiff_ele.text
+
+        adr_ele     = player_tr_ele.css("td")[6]
+        adr = adr_ele.text
+
+        fkdiff_ele  = player_tr_ele.css("td")[7]
+        fkdiff = fkdiff_ele.text
+
+        rating_ele  = player_tr_ele.css("td")[8]
+        rating = rating_ele.text
+
+        team1_stats << {player: player, kills: kills, assists: assists, deaths: deaths, kdratio: kdratio, kddiff: kddiff, adr: adr, fkdiff: fkdiff, rating: rating}
+      end
+
+      # ----------------------
+
+      team2_stats_ele = stats_eles.last
+      team2_stats = []
+      team2_stats_ele.css("tbody tr").map do |player_tr_ele|
+        player_ele  = player_tr_ele.css("td")[0]
+        player = {id: player_ele.css("a").attr("/")[-2].to_i, name: player_ele.css("a").text}
+
+        kills_ele   = player_tr_ele.css("td")[1]
+        kills = kills_ele.text
+
+        assists_ele = player_tr_ele.css("td")[2]
+        assists = assists_ele.text
+
+        deaths_ele  = player_tr_ele.css("td")[3]
+        deaths = deaths_ele.text
+
+        kdratio_ele = player_tr_ele.css("td")[4]
+        kdratio = kdratio_ele.text
+
+        kddiff_ele  = player_tr_ele.css("td")[5]
+        kddiff = kddiff_ele.text
+
+        adr_ele     = player_tr_ele.css("td")[6]
+        adr = adr_ele.text
+
+        fkdiff_ele  = player_tr_ele.css("td")[7]
+        fkdiff = fkdiff_ele.text
+
+        rating_ele  = player_tr_ele.css("td")[8]
+        rating = rating_ele.text
+
+        team2_stats << {player: player, kills: kills, assists: assists, deaths: deaths, kdratio: kdratio, kddiff: kddiff, adr: adr, fkdiff: fkdiff, rating: rating}
+      end
+
+      # ----------------------
+
+      {team_stats: {team1: team1_stats, team2: team2_stats}, event: {id: event_id, name: event_name}, match_id: match_id, team1: team1, team1_firstHalf: team1_firstHalf, team1_secondHalf: team1_secondHalf, team2: team2, team2_firstHalf: team2_firstHalf, team2_secondHalf: team2_secondHalf, breakdown: breakdown}
+    end
+
+    def stats_maps(event_id)
+      request = Typhoeus.get "https://www.hltv.org/stats/maps?event=#{event_id}", headers: headers
+
+      if request.success?
+          # hell yeah
+      elsif request.timed_out?
+        # aw hell no
+        # log("got a time out")
+        return
+      elsif request.code == 0
+        # Could not get an http response, something's wrong.
+        # log(response.return_message)
+        return
+      else
+        # Received a non-successful http response.
+        # log("HTTP request failed: " + response.code.to_s)
+        return
+      end
+
+      doc = Nokogiri::HTML(request.body)
+
+      maps_played_data = JSON.parse doc.css(".graph")[0].attr("data-fusionchart-config")
+      maps_played = maps_played_data["dataSource"]["data"].map{|k| k.slice(*["label", "value"]) }
+
+      # --------------------------------
+
+      wins_on_maps_data = JSON.parse doc.css(".graph")[1].attr("data-fusionchart-config")
+
+      wins_on_maps_data["dataSource"]["categories"]
+      wins_on_maps_data["dataSource"]["categories"][0]["category"]
+      wins_on_maps_data["dataSource"]["categories"][0]["category"].map{|k| k["label"] }
+
+      wins_on_maps_data["dataSource"]["dataset"]
+      ct = wins_on_maps_data["dataSource"]["dataset"][0]
+      wins_on_maps_ct = ct["data"].map{|k| k["value"] }
+
+      terrorist = wins_on_maps_data["dataSource"]["dataset"][1]
+      wins_on_maps_terrorist = terrorist["data"].map{|k| k["value"] }
+
+      wins_on_maps = {ct: wins_on_maps_ct, terrorist: wins_on_maps_terrorist}
+
+      {maps_played: maps_played, wins_on_maps: wins_on_maps}
     end
 
     def headers
