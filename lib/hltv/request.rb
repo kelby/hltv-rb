@@ -1,6 +1,8 @@
 require 'typhoeus'
 require 'nokogiri'
 
+require 'pry'
+
 module Hltv
   class Request
     def get_matches
@@ -36,6 +38,8 @@ module Hltv
 
         team1_ele = item.css(".team-cell img").first
         team2_ele = item.css(".team-cell img").last
+
+        next if team1_ele.nil? || team2_ele.nil?
 
         team1 = {id: team1_ele.attr("src").split('/').last.to_i, name: team1_ele.attr("title")}
         team2 = {id: team2_ele.attr("src").split('/').last.to_i, name: team2_ele.attr("title")}
@@ -244,8 +248,15 @@ module Hltv
       {team_stats: {team1: team1_stats, team2: team2_stats}, event: {id: event_id, name: event_name}, match_id: match_id, team1: team1, team1_firstHalf: team1_firstHalf, team1_secondHalf: team1_secondHalf, team2: team2, team2_firstHalf: team2_firstHalf, team2_secondHalf: team2_secondHalf, breakdown: breakdown}
     end
 
-    def stats_maps(event_id)
-      request = Typhoeus.get "https://www.hltv.org/stats/maps?event=#{event_id}", headers: headers
+    def stats_maps(event_id=nil, start_date=nil, end_date=nil)
+      start_date = Time.at(start_date.to_i).strftime("%F") if !start_date.nil?
+      end_date = Time.at(end_date.to_i).strftime("%F") if !end_date.nil?
+
+      if event_id.nil?
+        request = Typhoeus.get "https://www.hltv.org/stats/maps", params: {startDate: start_date, endDate: end_date}, headers: headers
+      else
+        request = Typhoeus.get "https://www.hltv.org/stats/maps", params: {event: event_id, startDate: start_date, endDate: end_date}, headers: headers
+      end
 
       if request.success?
           # hell yeah
@@ -267,6 +278,7 @@ module Hltv
 
       maps_played_data = JSON.parse doc.css(".graph")[0].attr("data-fusionchart-config")
       maps_played = maps_played_data["dataSource"]["data"].map{|k| k.slice(*["label", "value"]) }
+      maps_count = maps_played.map{|k| k["value"].to_i }.inject(&:+)
 
       # --------------------------------
 
@@ -285,8 +297,73 @@ module Hltv
 
       wins_on_maps = {ct: wins_on_maps_ct, terrorist: wins_on_maps_terrorist}
 
-      {maps_played: maps_played, wins_on_maps: wins_on_maps}
+      {maps_played: maps_played, wins_on_maps: wins_on_maps, maps_count: maps_count}
     end
+
+    def stats_players(player_id=nil, start_date=nil, end_date=nil)
+      start_date = Time.at(start_date.to_i).strftime("%F") if !start_date.nil?
+      end_date = Time.at(end_date.to_i).strftime("%F") if !end_date.nil?
+
+      if player_id.nil?
+        request = Typhoeus.get "https://www.hltv.org/stats/players", params: {startDate: start_date, endDate: end_date}, headers: headers
+      else
+        request = Typhoeus.get "https://www.hltv.org/stats/players/#{player_id}/-", params: {startDate: start_date, endDate: end_date}, headers: headers
+      end
+
+      if request.success?
+          # hell yeah
+      elsif request.timed_out?
+        # aw hell no
+        # log("got a time out")
+        return
+      elsif request.code == 0
+        # Could not get an http response, something's wrong.
+        # log(response.return_message)
+        return
+      else
+        # Received a non-successful http response.
+        # log("HTTP request failed: " + response.code.to_s)
+        return
+      end
+
+      doc = Nokogiri::HTML(request.body)
+
+      summary_ele = doc.css(".playerSummaryStatBox")
+
+      nickname = summary_ele.css(".summaryNickname").text
+      realname = summary_ele.css(".summaryRealname").text.strip
+      team_name = summary_ele.css(".SummaryTeamname").text.strip
+      team_id = summary_ele.css(".SummaryTeamname a").attr("href").value.split('/')[3].to_i
+      # team = {id: team_id, name: team_name}
+
+      rating, dpr, kast, impact, adr, kpr = summary_ele.css(".summaryStatBreakdownDataValue").map &:text
+      summary = {nickname: nickname, realname: realname, team_id: team_id, team_name: team_name, rating: rating, dpr: dpr, kast: kast, impact: impact, adr: adr, kpr: kpr}
+
+      # ------------------------------
+
+      stats_eles = doc.css(".statistics .stats-row")
+
+      total_kills = stats_eles[0].css("span").last.text
+      headshot = stats_eles[1].css("span").last.text
+      total_deaths = stats_eles[2].css("span").last.text
+      kd_ratio = stats_eles[3].css("span").last.text
+      damage_round = stats_eles[4].css("span").last.text
+      grenade_dmg_round = stats_eles[5].css("span").last.text
+      maps_played = stats_eles[6].css("span").last.text
+      rounds_played = stats_eles[7].css("span").last.text
+      kills_round = stats_eles[8].css("span").last.text
+      assists_round = stats_eles[9].css("span").last.text
+      deaths_round = stats_eles[10].css("span").last.text
+      saved_by_teammate_round = stats_eles[11].css("span").last.text
+      saved_teammates_round = stats_eles[12].css("span").last.text
+      rating = stats_eles[13].css("span").last.text
+
+      stats = {total_kills: total_kills, headshot: headshot, total_deaths: total_deaths, kd_ratio: kd_ratio, damage_round: damage_round, grenade_dmg_round: grenade_dmg_round, maps_played: maps_played, rounds_played: rounds_played, kills_round: kills_round, assists_round: assists_round, deaths_round: deaths_round, saved_by_teammate_round: saved_by_teammate_round, saved_teammates_round: saved_teammates_round, rating: rating}
+
+      {summary: summary, stats: stats}
+    end
+
+    private
 
     def headers
       _headers = {}

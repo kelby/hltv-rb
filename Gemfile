@@ -14,3 +14,9 @@ gem "redis"
 
 # Ruby client for RabbitMQ
 gem "bunny", ">= 2.14.1"
+
+# Classy web-development dressed in a DSL
+gem "sinatra"
+
+# IRB alternative
+gem 'pry', '~> 0.12.2'
