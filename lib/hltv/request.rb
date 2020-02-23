@@ -56,7 +56,23 @@ module Hltv
     end
 
     def get_match(id)
-      request = Typhoeus.get("https://www.hltv.org/matches/#{id}/-")
+      request = Typhoeus.get("https://www.hltv.org/matches/#{id}/-", headers: headers)
+
+      if request.success?
+          # hell yeah
+      elsif request.timed_out?
+        # aw hell no
+        # log("got a time out")
+        return
+      elsif request.code == 0
+        # Could not get an http response, something's wrong.
+        # log(response.return_message)
+        return
+      else
+        # Received a non-successful http response.
+        # log("HTTP request failed: " + response.code.to_s)
+        return
+      end
 
       doc = Nokogiri::HTML(request.body)
     end
@@ -112,16 +128,52 @@ module Hltv
         brackets: brackets, prize_distribution: prize_distribution, teams: teams}
     end
 
+    def get_team(team_id)
+      request = Typhoeus.get("https://www.hltv.org/team/#{team_id}/-", headers: headers)
+
+      if request.success?
+          # hell yeah
+      elsif request.timed_out?
+        # aw hell no
+        # log("got a time out")
+        return
+      elsif request.code == 0
+        # Could not get an http response, something's wrong.
+        # log(response.return_message)
+        return
+      else
+        # Received a non-successful http response.
+        # log("HTTP request failed: " + response.code.to_s)
+        return
+      end
+
+      doc = Nokogiri::HTML(request.body)
+
+      profile_team_ele = doc.css(".profile-team-container")
+      id = profile_team_ele.css(".teamlogo").attr("src").value.split("/").last.to_i
+      country = profile_team_ele.css(".team-country img").attr("title").value
+      name = profile_team_ele.css(".profile-team-name").text
+      # --------------------------------
+
+      stat_ele = doc.css(".profile-team-stats-container")
+      world_ranking = stat_ele.css(".profile-team-stat .right")[0].text.scan(/\d+/)[0].to_i
+      weeks_in_top30_for_core = stat_ele.css(".profile-team-stat .right")[1].text
+      average_player_age = stat_ele.css(".profile-team-stat .right")[2].text
+
+      stat = {world_ranking: world_ranking, weeks_in_top30_for_core: weeks_in_top30_for_core, average_player_age: average_player_age}
+      # --------------------------------
+    end
+
     # ==============================================
 
-    def stats_players(player_id=nil, start_date=nil, end_date=nil)
+    def stats_players(player_id=nil, event_id=nil, start_date=nil, end_date=nil)
       start_date = Time.at(start_date.to_i).strftime("%F") if !start_date.nil?
       end_date = Time.at(end_date.to_i).strftime("%F") if !end_date.nil?
 
       if player_id.nil?
         request = Typhoeus.get "https://www.hltv.org/stats/players", params: {startDate: start_date, endDate: end_date}, headers: headers
       else
-        request = Typhoeus.get "https://www.hltv.org/stats/players/#{player_id}/-", params: {startDate: start_date, endDate: end_date}, headers: headers
+        request = Typhoeus.get "https://www.hltv.org/stats/players/#{player_id}/-", params: {event: event_id, startDate: start_date, endDate: end_date}, headers: headers
       end
 
       if request.success?
@@ -158,9 +210,9 @@ module Hltv
 
       stats_eles = doc.css(".statistics .stats-row")
 
-      total_kills = stats_eles[0].css("span").last.text
+      total_kills = stats_eles[0].css("span").last.text.to_i
       headshot = stats_eles[1].css("span").last.text
-      total_deaths = stats_eles[2].css("span").last.text
+      total_deaths = stats_eles[2].css("span").last.text.to_i
       kd_ratio = stats_eles[3].css("span").last.text
       damage_round = stats_eles[4].css("span").last.text
       grenade_dmg_round = stats_eles[5].css("span").last.text
@@ -173,12 +225,112 @@ module Hltv
       saved_teammates_round = stats_eles[12].css("span").last.text
       rating = stats_eles[13].css("span").last.text
 
-      stats = {total_kills: total_kills, headshot: headshot, total_deaths: total_deaths, kd_ratio: kd_ratio, damage_round: damage_round, grenade_dmg_round: grenade_dmg_round, maps_played: maps_played, rounds_played: rounds_played, kills_round: kills_round, assists_round: assists_round, deaths_round: deaths_round, saved_by_teammate_round: saved_by_teammate_round, saved_teammates_round: saved_teammates_round, rating: rating}
+      stats = {total_kills: total_kills, headshot: headshot, total_deaths: total_deaths, kd_ratio: kd_ratio, damage_round: damage_round, grenade_dmg_round: grenade_dmg_round, maps_played: maps_played, rounds_played: rounds_played, kills_round: kills_round, assists_round: assists_round, deaths_round: deaths_round, saved_by_teammate_round: saved_by_teammate_round, saved_teammates_round: saved_teammates_round, rating: rating, kill_death_difference: total_kills - total_deaths}
 
       {summary: summary, stats: stats}
     end
 
-    def stats_teams
+    def stats_teams(team_id=nil, start_date=nil, end_date=nil)
+      start_date = Time.at(start_date.to_i).strftime("%F") if !start_date.nil?
+      end_date = Time.at(end_date.to_i).strftime("%F") if !end_date.nil?
+
+      if team_id.nil?
+        request = Typhoeus.get "https://www.hltv.org/stats/teams", params: {startDate: start_date, endDate: end_date}, headers: headers
+      else
+        request = Typhoeus.get "https://www.hltv.org/stats/teams/#{team_id}/-", params: {startDate: start_date, endDate: end_date}, headers: headers
+      end
+
+      if request.success?
+          # hell yeah
+      elsif request.timed_out?
+        # aw hell no
+        # log("got a time out")
+        return
+      elsif request.code == 0
+        # Could not get an http response, something's wrong.
+        # log(response.return_message)
+        return
+      else
+        # Received a non-successful http response.
+        # log("HTTP request failed: " + response.code.to_s)
+        return
+      end
+
+      doc = Nokogiri::HTML(request.body)
+
+      standard_eles = doc.css(".columns .standard-box")
+
+      maps_played = standard_eles[0].css(".large-strong").text # 比赛场次
+      wins_draws_losses = standard_eles[1].css(".large-strong").text.scan(/\d+/).map(&:to_i) # 胜平负
+      total_kills = standard_eles[2].css(".large-strong").text # 总击杀
+      total_deaths = standard_eles[3].css(".large-strong").text # 总死亡
+      rounds_played = standard_eles[4].css(".large-strong").text # 多少回合
+      kd_ratio = standard_eles[5].css(".large-strong").text #击杀/死亡比
+
+      {maps_played: maps_played, wins_draws_losses: wins_draws_losses, total_kills: total_kills, total_deaths: total_deaths, rounds_played: rounds_played, kd_ratio: kd_ratio}
+    end
+
+    def stats_teams_maps(team_id=nil, start_date=nil, end_date=nil)
+      start_date = Time.at(start_date.to_i).strftime("%F") if !start_date.nil?
+      end_date = Time.at(end_date.to_i).strftime("%F") if !end_date.nil?
+
+      if team_id.nil?
+        request = Typhoeus.get "https://www.hltv.org/stats/teams/maps", params: {startDate: start_date, endDate: end_date}, headers: headers
+      else
+        request = Typhoeus.get "https://www.hltv.org/stats/teams/maps/#{team_id}/-", params: {startDate: start_date, endDate: end_date}, headers: headers
+      end
+
+      if request.success?
+          # hell yeah
+      elsif request.timed_out?
+        # aw hell no
+        # log("got a time out")
+        return
+      elsif request.code == 0
+        # Could not get an http response, something's wrong.
+        # log(response.return_message)
+        return
+      else
+        # Received a non-successful http response.
+        # log("HTTP request failed: " + response.code.to_s)
+        return
+      end
+
+      doc = Nokogiri::HTML(request.body)
+
+      map_breakdown_data = JSON.parse doc.css(".graph").attr("data-fusionchart-config").text
+      map_breakdown = map_breakdown_data["dataSource"]["data"].map{|x| x.slice(*["label", "value"])}
+
+      map_highlight = doc.css(".map-pool .map-stats .map-pool-map-name").map do |x|
+        map = x.text. split("-").first.strip
+        highlight = x.text. split("-").last.strip
+
+        {label: map, value: highlight}
+      end
+
+      maps = doc.css(".two-grid .col .map-pool").map do |item|
+        item.css(".map-pool-map-name").text
+      end
+
+      overviews = doc.css(".two-grid .col .stats-rows").map do |item|
+        wins_draws_losses = item.css(".stats-row")[0].css("span").last.text.scan(/\d+/).map(&:to_i)
+        win_rate = item.css(".stats-row")[1].css("span").last.text
+        total_rounds = item.css(".stats-row")[2].css("span").last.text
+        round_win_after_getting_first_kill = item.css(".stats-row")[3].css("span").last.text
+        round_win_after_receiving_first_death = item.css(".stats-row")[4].css("span").last.text
+
+        {
+          wins_draws_losses: wins_draws_losses,
+          win_rate: win_rate,
+          total_rounds: total_rounds,
+          round_win_after_getting_first_kill: round_win_after_getting_first_kill,
+          round_win_after_receiving_first_death: round_win_after_receiving_first_death,
+        }
+      end
+
+      map_overview = {map: maps, overview: overviews}
+
+      {map_breakdown: map_breakdown, map_highlight: map_highlight, map_overview: map_overview}
     end
 
     def stats_matches
