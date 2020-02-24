@@ -2,7 +2,9 @@
 require "bundler/setup"
 
 require 'sinatra'
-require "hltv"
+require "./lib/hltv/request"
+
+# Bundler.require
 
 get '/ping' do
   'pong'

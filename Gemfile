@@ -1,7 +1,7 @@
 source "https://rubygems.org"
 
 # Specify your gem's dependencies in hltv.gemspec
-gemspec
+# gemspec
 
 # wraps libcurl in order to make fast and reliable requests.
 gem "typhoeus"
@@ -20,3 +20,6 @@ gem "sinatra"
 
 # IRB alternative
 gem 'pry', '~> 0.12.2'
+
+# fast & simple Ruby web server
+gem 'thin'
