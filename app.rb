@@ -18,6 +18,10 @@ get '/get_match/:id' do
   Hltv::Fetcher.new.get_match(params[:id]).to_json
 end
 
+get '/stats_match/:id' do
+  Hltv::Fetcher.new.stats_matches(params[:id]).to_json
+end
+
 get '/get_event/:id' do
   Hltv::Fetcher.new.get_event(params[:id]).to_json
 end

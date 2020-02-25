@@ -333,7 +333,102 @@ module Hltv
       {map_breakdown: map_breakdown, map_highlight: map_highlight, map_overview: map_overview}
     end
 
-    def stats_matches
+    def stats_matches(id=nil)
+      request = Typhoeus.get("https://www.hltv.org/stats/matches/#{id}/-", headers: headers)
+
+      if request.success?
+          # hell yeah
+      elsif request.timed_out?
+        # aw hell no
+        # log("got a time out")
+        return
+      elsif request.code == 0
+        # Could not get an http response, something's wrong.
+        # log(response.return_message)
+        return
+      else
+        # Received a non-successful http response.
+        # log("HTTP request failed: " + response.code.to_s)
+        return
+      end
+
+      doc = Nokogiri::HTML(request.body)
+
+      match_info_ele = doc.css(".match-info-box")
+
+      team1_ele = match_info_ele.css(".team-left")
+      team1 = {id: team1_ele.css('img').attr('src').value.split('/').last.to_i, name: team1_ele.css('img').attr('title').value, score: team1_ele.css('div').last.text.to_i}
+
+      team2_ele = match_info_ele.css(".team-right")
+      team2 = {id: team2_ele.css('img').attr('src').value.split('/').last.to_i, name: team2_ele.css('img').attr('title').value, score: team2_ele.css('div').last.text.to_i}
+
+      event = {id: match_info_ele.css("a").first.attr("href").split("event=").last.to_i, name: match_info_ele.css("a").first.text}
+
+      date = match_info_ele.css(".small-text span").first.attr("data-unix")
+
+      row_eles = doc.css(".match-info-row")
+
+      team_rating = {team1: row_eles[0].css('.right').text.split(" : ").first, team2: row_eles[0].css('.right').text.split(" : ").last}
+      first_kills = {team1: row_eles[1].css('.right').text.scan(/\d+/).first.to_i, team2: row_eles[1].css('.right').text.scan(/\d+/).last.to_i}
+      clutches_won = {team1: row_eles[2].css('.right').text.scan(/\d+/).first.to_i, team2: row_eles[2].css('.right').text.scan(/\d+/).last.to_i}
+
+      players_eles = doc.css(".top-players .most-x-box")
+
+      most_kills = {id: players_eles[0].css(".name a").first.attr('href').split('/')[-2].to_i, name: players_eles[0].css(".name a").first.text, value: players_eles[0].css(".value .valueName").text}
+      most_damage = {id: players_eles[1].css(".name a").first.attr('href').split('/')[-2].to_i, name: players_eles[1].css(".name a").first.text, value: players_eles[1].css(".value .valueName").text}
+      most_assists = {id: players_eles[2].css(".name a").first.attr('href').split('/')[-2].to_i, name: players_eles[2].css(".name a").first.text, value: players_eles[2].css(".value .valueName").text}
+      most_awp_kills = {id: players_eles[3].css(".name a").first.attr('href').split('/')[-2].to_i, name: players_eles[3].css(".name a").first.text, value: players_eles[3].css(".value .valueName").text}
+      most_first_kills = {id: players_eles[4].css(".name a").first.attr('href').split('/')[-2].to_i, name: players_eles[4].css(".name a").first.text, value: players_eles[4].css(".value .valueName").text}
+      best_rating = {id: players_eles[5].css(".name a").first.attr('href').split('/')[-2].to_i, name: players_eles[5].css(".name a").first.text, value: players_eles[5].css(".value .valueName").text}
+
+      overview = {team_rating: team_rating, first_kills: first_kills, clutches_won: clutches_won, most_kills: most_kills, most_damage: most_damage, most_assists: most_assists, most_awp_kills: most_awp_kills, most_first_kills: most_first_kills, best_rating: best_rating}
+
+      stats_eles = doc.css(".stats-table tbody")
+
+      player_stats = {}
+
+      team1_stats_ele = stats_eles.first
+      team1_stats = []
+      team1_stats_ele.css("tr").map do |item|
+        player = {id: item.css('.st-player a').first.attr("href").split('/')[-2].to_i, name: item.css('.st-player a').first.text}
+        kills = item.css('.st-kills').text.scan(/\d+/).first.to_i
+        hs_kills = item.css('.st-kills').text.scan(/\d+/).last.to_i
+        assists = item.css('.st-assists').text.scan(/\d+/).first.to_i
+        flash_assists = item.css('.st-assists').text.scan(/\d+/).last.to_i
+        deaths = item.css('.st-deaths').text.to_i
+        kast = item.css('.st-kdratio').text
+        kill_deaths_difference = item.css('.st-kddiff').text
+        adr = item.css('.st-adr').text
+        first_kills_difference = item.css('.st-fkdiff').text
+        rating = item.css('.st-rating').text
+
+        team1_stats << {player: player, kills: kills, hs_kills: hs_kills, assists: assists, flash_assists: flash_assists, deaths: deaths, kast: kast, kill_deaths_difference: kill_deaths_difference, adr: adr, first_kills_difference: first_kills_difference, rating: rating}
+      end
+      player_stats['team1'] = team1_stats
+
+      team2_stats_ele = stats_eles.last
+      team2_stats = []
+      team2_stats_ele.css("tr").map do |item|
+        player = {id: item.css('.st-player a').first.attr("href").split('/')[-2].to_i, name: item.css('.st-player a').first.text}
+        kills = item.css('.st-kills').text.scan(/\d+/).first.to_i
+        hs_kills = item.css('.st-kills').text.scan(/\d+/).last.to_i
+        assists = item.css('.st-assists').text.scan(/\d+/).first.to_i
+        flash_assists = item.css('.st-assists').text.scan(/\d+/).last.to_i
+        deaths = item.css('.st-deaths').text.to_i
+        kast = item.css('.st-kdratio').text
+        kill_deaths_difference = item.css('.st-kddiff').text
+        adr = item.css('.st-adr').text
+        first_kills_difference = item.css('.st-fkdiff').text
+        rating = item.css('.st-rating').text
+
+        team2_stats << {player: player, kills: kills, hs_kills: hs_kills, assists: assists, flash_assists: flash_assists, deaths: deaths, kast: kast, kill_deaths_difference: kill_deaths_difference, adr: adr, first_kills_difference: first_kills_difference, rating: rating}
+      end
+      player_stats['team2'] = team2_stats
+
+      performance_data = JSON.parse doc.css(".graph").attr("data-fusionchart-config").value
+      performance_rating = performance_data["dataSource"]["data"].map{|x| x.slice(*["label", "value"])}
+
+      {date: date, team1: team1, team2: team2, event: event, overview: overview, player_stats: player_stats, performance_rating: performance_rating}
     end
 
     def stats_events
